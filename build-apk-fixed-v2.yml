@@ -1,0 +1,78 @@
+name: WebVPNBrowser Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recreate Android project
+        shell: bash
+        run: |
+          cat > /tmp/project.b64 << 'PROJECT_EOF'
+          UEsDBBQAAAAIAFgcJ10m7cw5+QEAAFYDAAAJABwAUkVBRE1FLm1kVVQJAAPYMJ5q1zCeanV4CwAB
+          BAAAAAAE6QMAAGVSvW7TUBTe/RRHYiZdmNjSJG1BcWpRQ7s1qX2pAsSWHFft2KLUZvDIgMQD2Ikg
+          wU0L6sJznOtsfRK+Y9cigeXaPvn+7vnyhA7VyRurR9uBfz5WAT1cfqbORag8V7mGjnjJcx0Tz/Qn
+          vN7r+OEyWSWc6iuMYtodhntnJw3D4JR/ylSwt7zQ8XPjKWGU8S8CNdUf+X6VEN+B+F1AGadkKnc4
+          sAL/nXLCoe8BSDznHPhvwJrWM9H4wXMY5uBY7Z2KZ7lv275zNlJeuIk4Mrubg/Z+i5A75ZtigTOv
+          +Hu22d069AP3H3b3oAIvJOB/rM6Foz6AYR/ZwsvkdyqmnAMf0Whw6qlQroAbpqtET7ApHcsr9Ruh
+          HwRI26+UcORYbaqv69XK54xw3HEGXrVCcUl5KRbQi6p5CtxLaxcbh0ipvnaD2prKbAdwHZwqajqO
+          Go9pJxiM1LkfvC9VYXtVX7V0k+iwwnVFmfQ1epqsi4sdqJIULaWcAbNKkKqYYrZoUNNzA3/oUpkh
+          orLI20daHbbfbNkv9nvHrVedpt05Rj+vzU7P7pP+jRgzWGViAeSmuPEoChhkiy+SN9YRHG6AxKPc
+          Im0PQ7taNbFUN9cTkYrKDxTFX0kmOiqmf+upqtuqS6oTwwLmk8oYW18rCkJYoPw5JEcVlJfIVpo0
+          jD9QSwECHgMUAAAACABYHCddJu3MOfkBAABWAwAACQAYAAAAAAABAAAApIEAAAAAUkVBRE1FLm1k
+          VVQFAAPYMJ5qdXgLAAEEAAAAAATpAwAAUEsFBgAAAAABAAEATwAAADwCAAAAAA==
+          PROJECT_EOF
+          base64 -d /tmp/project.b64 > /tmp/project.zip
+          rm -rf /tmp/project
+          mkdir -p /tmp/project
+          unzip -q /tmp/project.zip -d /tmp/project
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle
+        shell: bash
+        run: |
+          curl -L --fail -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle
+
+      - name: Build debug APK
+        working-directory: /tmp/project
+        shell: bash
+        run: |
+          /tmp/gradle/gradle-8.11.1/bin/gradle :app:assembleDebug --stacktrace --info
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebVPNBrowser-debug-apk
+          path: /tmp/project/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload build logs if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebVPNBrowser-build-logs
+          path: |
+            /tmp/project/**/*.log
+            /tmp/project/**/*.txt
+          if-no-files-found: ignore
